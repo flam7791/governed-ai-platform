@@ -1,0 +1,7 @@
+# Only tool settings: this repository holds deployment files and scripts, not a package.
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM"]

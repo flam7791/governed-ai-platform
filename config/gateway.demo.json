@@ -1,0 +1,91 @@
+{
+  "db_path": "gateway.db",
+  "cache_ttl_seconds": 60,
+  "max_output_tokens": 4000,
+  "models": [
+    {
+      "alias": "demo-local",
+      "provider": "openai_compatible",
+      "model": "demo",
+      "base_url": "http://mock-llm:9000/v1",
+      "tier": "local",
+      "price_input": 0.0,
+      "price_output": 0.0,
+      "external": false
+    },
+    {
+      "alias": "demo-fast",
+      "provider": "openai_compatible",
+      "model": "demo",
+      "base_url": "http://mock-llm:9000/v1",
+      "tier": "fast",
+      "price_input": 1.0,
+      "price_output": 5.0,
+      "external": false
+    },
+    {
+      "alias": "demo-strong",
+      "provider": "openai_compatible",
+      "model": "demo",
+      "base_url": "http://mock-llm:9000/v1",
+      "tier": "strong",
+      "price_input": 2.0,
+      "price_output": 10.0,
+      "external": false
+    },
+    {
+      "alias": "local-embed",
+      "provider": "openai_compatible",
+      "model": "demo-embed",
+      "base_url": "http://mock-llm:9000/v1",
+      "kind": "embedding",
+      "tier": "embedding",
+      "price_input": 0.0,
+      "price_output": 0.0,
+      "external": false
+    }
+  ],
+  "tier_models": {
+    "local": "demo-local",
+    "fast": "demo-fast",
+    "strong": "demo-strong"
+  },
+  "fallback_order": [
+    "demo-strong",
+    "demo-fast",
+    "demo-local"
+  ],
+  "embedding_model": "local-embed",
+  "teams": [
+    {
+      "name": "agents",
+      "key_env": "LLMGW_KEY_AGENTS",
+      "monthly_budget_usd": 20,
+      "allowed_models": [
+        "*"
+      ],
+      "data_policy": "mask_pii",
+      "on_budget_exhausted": "degrade"
+    },
+    {
+      "name": "evidence-indexer",
+      "key_env": "LLMGW_KEY_EVIDENCE",
+      "monthly_budget_usd": 0,
+      "allowed_models": [
+        "local-embed"
+      ],
+      "data_policy": "local_only",
+      "on_budget_exhausted": "block"
+    },
+    {
+      "name": "research",
+      "key_env": "LLMGW_KEY_RESEARCH",
+      "monthly_budget_usd": 10,
+      "allowed_models": [
+        "*"
+      ],
+      "data_policy": "mask_pii",
+      "on_budget_exhausted": "block"
+    }
+  ]
+}

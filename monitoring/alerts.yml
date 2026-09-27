@@ -1,0 +1,41 @@
+# Alerts worth having on day one. Thresholds are starting points to tune with the teams.
+groups:
+  - name: governed-ai-platform
+    rules:
+      - alert: TeamBudgetAbove80Percent
+        expr: llmgw_budget_used_ratio > 0.8
+        labels: {severity: warning}
+        annotations:
+          summary: "Team {{ $labels.team }} has used over 80% of its monthly model budget."
+
+      - alert: ModelProviderFailing
+        expr: sum by (model) (rate(llmgw_requests_total{status="provider_error"}[10m])) > 0.1
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: "Calls to {{ $labels.model }} are failing; requests fall back to other models."
+
+      - alert: ModelLatencyHigh
+        expr: histogram_quantile(0.95, sum by (le, model) (rate(llmgw_model_latency_seconds_bucket[15m]))) > 40
+        for: 15m
+        labels: {severity: info}
+        annotations:
+          summary: "95th percentile latency of {{ $labels.model }} is above 40 seconds."
+
+      - alert: ApprovalWaitingTooLong
+        expr: govagents_oldest_pending_approval_age_seconds > 4 * 3600
+        labels: {severity: info}
+        annotations:
+          summary: "An agent action has waited more than four hours for a person's decision."
+
+      - alert: AgentRunsFailing
+        expr: delta(govagents_runs{status="failed"}[1h]) > 3
+        labels: {severity: warning}
+        annotations:
+          summary: "Several agent runs failed in the last hour: check the audit trail."
+
+      - alert: PolicyRefusalsSpike
+        expr: sum(increase(govagents_policy_decisions_total{verdict="deny"}[1h])) > 20
+        labels: {severity: info}
+        annotations:
+          summary: "Agents are attempting many refused actions: a prompt, a tool or an injection?"

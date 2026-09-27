@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "17 6 * * 1"   # weekly, to catch drift in base images and dependencies
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  stack:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: platform
+
+      - name: Read the pinned component versions
+        run: grep -v '^#' platform/components.env | grep . >> "$GITHUB_ENV"
+
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ env.GATEWAY_REPO }}
+          ref: ${{ env.GATEWAY_REF }}
+          path: governed-llm-gateway
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ env.EVIDENCE_REPO }}
+          ref: ${{ env.EVIDENCE_REF }}
+          path: policy-evidence-mcp
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ env.AGENTS_REPO }}
+          ref: ${{ env.AGENTS_REF }}
+          path: governed-agents
+
+      - name: Lint the scripts
+        working-directory: platform
+        run: |
+          pipx run ruff check .
+          pipx run ruff format --check .
+
+      - name: Configuration and alert rules are valid
+        working-directory: platform
+        run: |
+          python scripts/new_env.py --demo
+          docker compose --profile demo --profile monitoring config -q
+          docker run --rm -v "$PWD/monitoring:/m:ro" --entrypoint promtool \
+            prom/prometheus:v3.5.0 check rules /m/alerts.yml
+
+      - name: Build and start the stack (demonstration model, no keys)
+        working-directory: platform
+        run: docker compose --profile demo up -d --build --wait
+
+      - name: End-to-end smoke test
+        working-directory: platform
+        run: python scripts/smoke_test.py
+
+      - name: Logs
+        if: always()
+        working-directory: platform
+        run: docker compose --profile demo logs --no-color
+
+      - name: Stop and remove
+        if: always()
+        working-directory: platform
+        run: docker compose --profile demo down -v

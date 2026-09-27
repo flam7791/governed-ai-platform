@@ -1,0 +1,129 @@
+# governed-ai-platform: the gateway, the MCP evidence server and the agents service, wired
+# together, with optional monitoring and local models.
+#
+#   docker compose --profile demo up -d --build          # no keys, no GPU: a demonstration model
+#   docker compose --profile local up -d --build         # Claude + local models through Ollama
+#   add --profile monitoring for Prometheus and the alert rules
+#
+# Component sources are sibling folders by default (../governed-llm-gateway, ...), or the folders
+# named in .env. CI checks out the component versions pinned in components.env.
+
+name: governed-ai-platform
+
+x-hardening: &hardening
+  restart: unless-stopped
+  read_only: true               # the image cannot be modified at run time...
+  tmpfs: [/tmp]                 # ...scratch space in memory only
+  security_opt: ["no-new-privileges:true"]
+  cap_drop: [ALL]
+
+services:
+  gateway:
+    <<: *hardening
+    build: ${GATEWAY_SRC:-../governed-llm-gateway}
+    image: governed-llm-gateway:platform
+    environment:
+      LLMGW_KEY_AGENTS: ${LLMGW_KEY_AGENTS:?run scripts/new_env.py first}
+      LLMGW_KEY_EVIDENCE: ${LLMGW_KEY_EVIDENCE:?run scripts/new_env.py first}
+      LLMGW_KEY_RESEARCH: ${LLMGW_KEY_RESEARCH:-}
+      LLMGW_METRICS_TOKEN: ${GATEWAY_METRICS_TOKEN:?run scripts/new_env.py first}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    volumes:
+      - ./config/${GATEWAY_CONFIG:-gateway.json}:/config/gateway.json:ro
+      - gateway-data:/data
+    ports:
+      - "127.0.0.1:8080:8080"   # for your own clients; published on this machine only
+    depends_on:
+      mock-llm: {condition: service_healthy, required: false}
+
+  evidence-mcp:
+    <<: *hardening
+    build: ${EVIDENCE_SRC:-../policy-evidence-mcp}
+    image: policy-evidence-mcp:platform
+    environment:
+      EVIDENCE_MCP_MAX_CLASSIFICATION: internal
+      EVIDENCE_MCP_EMBEDDINGS_URL: http://gateway:8080/v1
+      EVIDENCE_MCP_EMBEDDINGS_MODEL: auto
+      EVIDENCE_MCP_EMBEDDINGS_API_KEY: ${LLMGW_KEY_EVIDENCE}
+      EVIDENCE_MCP_CACHE_DIR: /tmp/evidence-cache
+    volumes:
+      - evidence-index:/app/index
+    # Re-index with vectors from the gateway (a local embedding model, data policy local_only);
+    # if that is not possible, keep the keyword index built into the image.
+    command:
+      - sh
+      - -c
+      - >-
+        evidence-mcp ingest --corpus sample_corpus --embeddings
+        || echo "embeddings unavailable: serving keyword search";
+        exec evidence-mcp serve --transport streamable-http --host 0.0.0.0 --port 8000
+        --allowed-host evidence-mcp
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('127.0.0.1', 8000), 2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 20s
+    # No published port: the MCP server has no authentication of its own, so only services on
+    # the platform network can reach it.
+    depends_on:
+      gateway: {condition: service_healthy}
+
+  agents:
+    <<: *hardening
+    build: ${AGENTS_SRC:-../governed-agents}
+    image: governed-agents:platform
+    environment:
+      GOVAGENTS_PROVIDER: openai_compatible
+      GOVAGENTS_BASE_URL: http://gateway:8080/v1
+      GOVAGENTS_API_KEY: ${LLMGW_KEY_AGENTS}
+      GOVAGENTS_MODEL_FAST: fast
+      GOVAGENTS_MODEL_STRONG: strong
+      GOVAGENTS_EVIDENCE_MCP_URL: http://evidence-mcp:8000/mcp
+      GOVAGENTS_API_TOKENS: ${GOVAGENTS_API_TOKENS:?run scripts/new_env.py first}
+      GOVAGENTS_METRICS_TOKEN: ${AGENTS_METRICS_TOKEN:?run scripts/new_env.py first}
+    volumes:
+      - agents-data:/data
+    ports:
+      - "127.0.0.1:8090:8090"   # the approvals page and API
+    depends_on:
+      gateway: {condition: service_healthy}
+      evidence-mcp: {condition: service_healthy}
+
+  mock-llm:
+    profiles: [demo]
+    <<: *hardening
+    build: ./mock-llm
+    image: governed-ai-platform-mock-llm:platform
+
+  ollama:
+    profiles: [local]
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    volumes:
+      - ollama-models:/root/.ollama
+
+  prometheus:
+    profiles: [monitoring]
+    image: prom/prometheus:v3.5.0
+    restart: unless-stopped
+    volumes:
+      - ./monitoring:/etc/prometheus:ro
+      - prometheus-data:/prometheus
+    secrets: [gateway_metrics_token, agents_metrics_token]
+    ports:
+      - "127.0.0.1:9090:9090"
+    depends_on: [gateway, agents]
+
+secrets:
+  gateway_metrics_token:
+    environment: GATEWAY_METRICS_TOKEN
+  agents_metrics_token:
+    environment: AGENTS_METRICS_TOKEN
+
+volumes:
+  gateway-data:
+  evidence-index:
+  agents-data:
+  ollama-models:
+  prometheus-data:
