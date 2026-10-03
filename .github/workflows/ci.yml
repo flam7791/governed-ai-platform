@@ -45,11 +45,20 @@ jobs:
           pipx run ruff check .
           pipx run ruff format --check .
 
+      - name: Configuration invariants (sovereign has no route out)
+        working-directory: platform
+        run: |
+          pip install pytest
+          pytest -q tests
+
       - name: Configuration and alert rules are valid
         working-directory: platform
         run: |
           python scripts/new_env.py --demo
           docker compose --profile demo --profile monitoring config -q
+          python scripts/new_env.py --sovereign --force
+          docker compose --profile sovereign config -q
+          python scripts/new_env.py --demo --force
           docker run --rm -v "$PWD/monitoring:/m:ro" --entrypoint promtool \
             prom/prometheus:v3.5.0 check rules /m/alerts.yml
 

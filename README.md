@@ -87,6 +87,18 @@ instead, copy the model entries from the gateway's
 If Ollama already runs on your machine, point the local models at
 `http://host.docker.internal:11434/v1` and skip the `local` profile.
 
+## Sovereign: open-weight models only
+
+```bash
+python scripts/new_env.py --sovereign      # no API key
+docker compose --profile sovereign up -d --build --wait
+```
+
+Every tier (local, fast, strong) and the embeddings run on open-weight models through Ollama;
+no external model is defined and every team is `local_only`, so nothing can leave by
+misconfiguration. For restricted information and air-gapped networks; vLLM on GPU servers is a
+change of URL. See [docs/sovereign.md](docs/sovereign.md).
+
 ## Monitoring
 
 ```bash
@@ -111,6 +123,8 @@ catch drift in base images and dependencies. Upgrading a component is a one-line
 - [Runbook](docs/runbook.md): start, stop, keys, approvals, kill switches, backups, incidents.
 - [Lifecycle](docs/lifecycle.md): versions, release checklist, evaluation gates, upgrades,
   rollback, retiring a model.
+- [Sovereign mode](docs/sovereign.md): open-weight models only, sizing, vLLM, licences.
+- [Design decisions](docs/decisions.md): why the platform is built this way.
 - [Azure deployment design](docs/azure.md): how this maps to Azure Container Apps, Key Vault,
   managed identity and Azure Monitor. A design, not a tested deployment.
 

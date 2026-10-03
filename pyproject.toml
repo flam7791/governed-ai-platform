@@ -5,3 +5,9 @@ target-version = "py310"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "SIM"]
+
+# Recorded exceptions to the engineering standards (checked by aief check).
+[tool.aief.waivers]
+ENG-05 = "Deployment repository: each component carries its own evaluation; the platform gate is the end-to-end smoke test"
+ENG-12 = "Deployment repository: system cards belong to the components it deploys"
+ENG-14 = "No Python dependencies of its own: each component scans its dependencies in CI, and Dependabot updates base images and actions"

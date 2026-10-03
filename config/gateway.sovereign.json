@@ -1,0 +1,85 @@
+{
+  "db_path": "gateway.db",
+  "cache_ttl_seconds": 86400,
+  "max_output_tokens": 4000,
+  "models": [
+    {
+      "alias": "local-small",
+      "provider": "openai_compatible",
+      "model": "llama3.2:3b",
+      "base_url": "http://ollama:11434/v1",
+      "tier": "local",
+      "price_input": 0.0,
+      "price_output": 0.0,
+      "external": false
+    },
+    {
+      "alias": "local-fast",
+      "provider": "openai_compatible",
+      "model": "qwen2.5:7b",
+      "base_url": "http://ollama:11434/v1",
+      "tier": "fast",
+      "price_input": 0.0,
+      "price_output": 0.0,
+      "external": false
+    },
+    {
+      "alias": "local-strong",
+      "provider": "openai_compatible",
+      "model": "qwen2.5:14b",
+      "base_url": "http://ollama:11434/v1",
+      "tier": "strong",
+      "price_input": 0.0,
+      "price_output": 0.0,
+      "external": false
+    },
+    {
+      "alias": "local-embed",
+      "provider": "openai_compatible",
+      "model": "nomic-embed-text",
+      "base_url": "http://ollama:11434/v1",
+      "kind": "embedding",
+      "tier": "embedding",
+      "price_input": 0.0,
+      "price_output": 0.0,
+      "external": false
+    }
+  ],
+  "tier_models": {
+    "local": "local-small",
+    "fast": "local-fast",
+    "strong": "local-strong"
+  },
+  "fallback_order": [
+    "local-strong",
+    "local-fast",
+    "local-small"
+  ],
+  "embedding_model": "local-embed",
+  "teams": [
+    {
+      "name": "agents",
+      "key_env": "LLMGW_KEY_AGENTS",
+      "monthly_budget_usd": 0,
+      "allowed_models": ["*"],
+      "data_policy": "local_only",
+      "on_budget_exhausted": "degrade"
+    },
+    {
+      "name": "evidence-indexer",
+      "key_env": "LLMGW_KEY_EVIDENCE",
+      "monthly_budget_usd": 0,
+      "allowed_models": ["local-embed"],
+      "data_policy": "local_only",
+      "on_budget_exhausted": "block"
+    },
+    {
+      "name": "research",
+      "key_env": "LLMGW_KEY_RESEARCH",
+      "monthly_budget_usd": 0,
+      "allowed_models": ["*"],
+      "data_policy": "local_only",
+      "on_budget_exhausted": "degrade"
+    }
+  ]
+}

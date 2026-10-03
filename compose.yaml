@@ -3,6 +3,7 @@
 #
 #   docker compose --profile demo up -d --build          # no keys, no GPU: a demonstration model
 #   docker compose --profile local up -d --build         # Claude + local models through Ollama
+#   docker compose --profile sovereign up -d --build     # open-weight models only (new_env.py --sovereign)
 #   add --profile monitoring for Prometheus and the alert rules
 #
 # Component sources are sibling folders by default (../governed-llm-gateway, ...), or the folders
@@ -97,7 +98,7 @@ services:
     image: governed-ai-platform-mock-llm:platform
 
   ollama:
-    profiles: [local]
+    profiles: [local, sovereign]   # sovereign: the only model server, see docs/sovereign.md
     image: ollama/ollama:latest
     restart: unless-stopped
     volumes:
