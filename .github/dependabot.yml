@@ -1,11 +1,18 @@
 version: 2
+# Monthly and grouped: one pull request per ecosystem, not one per package.
 updates:
   - package-ecosystem: github-actions
     directory: /
     schedule: {interval: monthly}
+    groups:
+      github-actions: {patterns: ["*"]}
   - package-ecosystem: docker-compose
     directory: /
     schedule: {interval: monthly}
+    groups:
+      compose-images: {patterns: ["*"]}
   - package-ecosystem: docker
     directory: /mock-llm
     schedule: {interval: monthly}
+    groups:
+      base-images: {patterns: ["*"]}

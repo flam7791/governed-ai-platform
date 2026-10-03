@@ -1,5 +1,7 @@
 # governed-ai-platform
 
+[![CI](https://github.com/flam7791/governed-ai-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/flam7791/governed-ai-platform/actions/workflows/ci.yml) [![Licence: MIT](https://img.shields.io/badge/licence-MIT-blue.svg)](LICENSE)
+
 A **reference deployment** that turns three prototypes into one operable service: an LLM
 gateway, an MCP evidence server and a governed multi-agent service, wired together with
 containers, secrets, monitoring and an end-to-end test that runs on every change.
