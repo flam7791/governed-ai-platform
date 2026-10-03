@@ -76,7 +76,7 @@ jobs:
           docker compose --profile sovereign config -q
           python scripts/new_env.py --demo --tracing --force
           docker run --rm -v "$PWD/monitoring:/m:ro" --entrypoint promtool \
-            prom/prometheus:v3.5.0 check rules /m/alerts.yml
+            prom/prometheus:v3.15.0 check rules /m/alerts.yml
 
       - name: Build and start the stack (demonstration model, no keys, with tracing)
         working-directory: platform
