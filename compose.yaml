@@ -106,7 +106,7 @@ services:
 
   prometheus:
     profiles: [monitoring]
-    image: prom/prometheus:v3.5.0
+    image: prom/prometheus:v3.15.0
     restart: unless-stopped
     volumes:
       - ./monitoring:/etc/prometheus:ro
