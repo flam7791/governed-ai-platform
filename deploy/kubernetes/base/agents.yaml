@@ -1,0 +1,107 @@
+# The agents service: approvals page, API and metrics. Runs, the audit trail and approvals are
+# SQLite on a volume: one replica, Recreate.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: agents
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: agents-data
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agents
+  labels:
+    app.kubernetes.io/name: agents
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: agents
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: agents
+    spec:
+      serviceAccountName: agents
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: agents
+          image: governed-agents
+          args: [govagents, serve, --host, 0.0.0.0, --port, "8090"]
+          ports:
+            - name: http
+              containerPort: 8090
+          env:
+            - name: GOVAGENTS_PROVIDER
+              value: openai_compatible
+            - name: GOVAGENTS_BASE_URL
+              value: http://gateway:8080/v1
+            - name: GOVAGENTS_MODEL_FAST
+              value: fast
+            - name: GOVAGENTS_MODEL_STRONG
+              value: strong
+            - name: GOVAGENTS_EVIDENCE_MCP_URL
+              value: http://evidence-mcp:8000/mcp
+            - name: GOVAGENTS_API_KEY
+              valueFrom: {secretKeyRef: {name: platform-secrets, key: LLMGW_KEY_AGENTS}}
+            - name: GOVAGENTS_EVIDENCE_MCP_TOKEN
+              valueFrom: {secretKeyRef: {name: platform-secrets, key: EVIDENCE_MCP_TOKEN_AGENTS}}
+            - name: GOVAGENTS_API_TOKENS
+              valueFrom: {secretKeyRef: {name: platform-secrets, key: GOVAGENTS_API_TOKENS}}
+            - name: GOVAGENTS_METRICS_TOKEN
+              valueFrom: {secretKeyRef: {name: platform-secrets, key: AGENTS_METRICS_TOKEN}}
+          readinessProbe:
+            httpGet: {path: /healthz, port: http}
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: {path: /healthz, port: http}
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          resources:
+            requests: {cpu: 100m, memory: 256Mi}
+            limits: {cpu: "1", memory: 1Gi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - {name: data, mountPath: /data}
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: agents-data
+        - name: tmp
+          emptyDir: {sizeLimit: 256Mi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: agents
+spec:
+  selector:
+    app.kubernetes.io/name: agents
+  ports:
+    - name: http
+      port: 8090
+      targetPort: http

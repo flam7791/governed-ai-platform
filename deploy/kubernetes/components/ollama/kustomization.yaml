@@ -1,0 +1,5 @@
+# Ollama serving open-weight models inside the cluster (live and sovereign overlays).
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+resources:
+  - ollama.yaml

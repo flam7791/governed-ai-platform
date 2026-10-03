@@ -1,0 +1,31 @@
+# Open-weight models only: every tier and the embeddings on Ollama inside the cluster, every team
+# local_only, and no network path out of the namespace (no internet-egress component). Models are
+# loaded once, see docs/kubernetes.md.
+#
+#   python scripts/new_env.py --sovereign --kubernetes       # writes secrets/ here (git-ignored)
+#   kubectl apply -k deploy/kubernetes/overlays/sovereign
+#
+# Add the tracing component to trace every run: components: [..., ../../components/tracing]
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: governed-ai
+
+resources:
+  - ../../base
+
+components:
+  - ../../components/ollama
+
+configMapGenerator:
+  - name: gateway-config
+    files:
+      - gateway.json   # identical to config/gateway.sovereign.json (checked by tests/test_kubernetes.py)
+
+secretGenerator:
+  - name: platform-secrets
+    envs:
+      - secrets/platform.env
+  - name: evidence-mcp-tokens
+    files:
+      - tokens.json=secrets/evidence-mcp-tokens.json

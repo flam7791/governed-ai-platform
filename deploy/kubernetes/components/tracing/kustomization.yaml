@@ -1,0 +1,19 @@
+# Tracing: Jaeger in the namespace, and the three services sending spans to it over OTLP/HTTP.
+# An agent run is one trace across the agents service, the gateway and the MCP server. Spans
+# carry identifiers, models, tokens, costs and policy decisions, never prompts or documents.
+# For a managed backend (Azure Monitor, Grafana Tempo), point OTEL_EXPORTER_OTLP_ENDPOINT at an
+# OpenTelemetry Collector instead and leave Jaeger out.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+resources:
+  - jaeger.yaml
+patches:
+  - target: {kind: Deployment, name: gateway}
+    patch: &otel |-
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value: {name: OTEL_EXPORTER_OTLP_ENDPOINT, value: "http://jaeger:4318"}
+  - target: {kind: Deployment, name: evidence-mcp}
+    patch: *otel
+  - target: {kind: Deployment, name: agents}
+    patch: *otel

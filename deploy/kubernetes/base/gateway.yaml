@@ -1,0 +1,106 @@
+# The LLM gateway: the only way to reach a model. Its ledger is SQLite on a volume, so it runs
+# as one replica (Recreate); a shared database would be the change for more.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: gateway
+automountServiceAccountToken: false   # it never calls the Kubernetes API
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: gateway-data
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gateway
+  labels:
+    app.kubernetes.io/name: gateway
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: gateway
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: gateway
+    spec:
+      serviceAccountName: gateway
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: gateway
+          image: governed-llm-gateway
+          args: [llmgw, serve, --config, /config/gateway.json, --host, 0.0.0.0, --port, "8080"]
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: LLMGW_DB_PATH
+              value: /data/gateway.db
+            - name: LLMGW_KEY_AGENTS
+              valueFrom: {secretKeyRef: {name: platform-secrets, key: LLMGW_KEY_AGENTS}}
+            - name: LLMGW_KEY_EVIDENCE
+              valueFrom: {secretKeyRef: {name: platform-secrets, key: LLMGW_KEY_EVIDENCE}}
+            - name: LLMGW_KEY_RESEARCH
+              valueFrom: {secretKeyRef: {name: platform-secrets, key: LLMGW_KEY_RESEARCH}}
+            - name: LLMGW_METRICS_TOKEN
+              valueFrom: {secretKeyRef: {name: platform-secrets, key: GATEWAY_METRICS_TOKEN}}
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef: {name: platform-secrets, key: ANTHROPIC_API_KEY, optional: true}
+          readinessProbe:
+            httpGet: {path: /healthz, port: http}
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: {path: /healthz, port: http}
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          resources:
+            requests: {cpu: 100m, memory: 256Mi}
+            limits: {cpu: "1", memory: 512Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - {name: config, mountPath: /config, readOnly: true}
+            - {name: data, mountPath: /data}
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: config
+          configMap:
+            name: gateway-config
+        - name: data
+          persistentVolumeClaim:
+            claimName: gateway-data
+        - name: tmp
+          emptyDir: {sizeLimit: 64Mi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gateway
+spec:
+  selector:
+    app.kubernetes.io/name: gateway
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http

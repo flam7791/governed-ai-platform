@@ -1,0 +1,7 @@
+# Lets Ollama download models from the internet (HTTPS). Included in the live overlay; for the
+# sovereign overlay, apply it only while pulling models, or load the volume from an internal
+# mirror, so that in normal operation the model server has no route out.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+resources:
+  - model-pull.yaml

@@ -1,0 +1,83 @@
+# Runs as a non-root user (the namespace enforces the restricted Pod Security Standard), with
+# models on a volume. For a GPU, add `nvidia.com/gpu: 1` to the limits and a node selector for
+# a GPU node pool. Models are pulled once (see docs/kubernetes.md); vLLM is a change of image
+# and URL for serving at volume.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ollama-models
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 40Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ollama
+  labels:
+    app.kubernetes.io/name: ollama
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ollama
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: ollama
+        governed-ai/role: model-server
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: ollama
+          image: ollama/ollama:0.35.1
+          env:
+            - {name: OLLAMA_MODELS, value: /models}
+            - {name: OLLAMA_HOST, value: "0.0.0.0:11434"}
+            - {name: HOME, value: /tmp}
+          ports:
+            - name: http
+              containerPort: 11434
+          readinessProbe:
+            httpGet: {path: /, port: http}
+            periodSeconds: 10
+          resources:
+            requests: {cpu: "2", memory: 8Gi}
+            limits: {cpu: "8", memory: 16Gi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - {name: models, mountPath: /models}
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: models
+          persistentVolumeClaim:
+            claimName: ollama-models
+        - name: tmp
+          emptyDir: {sizeLimit: 1Gi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ollama
+spec:
+  selector:
+    app.kubernetes.io/name: ollama
+  ports:
+    - name: http
+      port: 11434
+      targetPort: http

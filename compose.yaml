@@ -5,11 +5,16 @@
 #   docker compose --profile local up -d --build         # Claude + local models through Ollama
 #   docker compose --profile sovereign up -d --build     # open-weight models only (new_env.py --sovereign)
 #   add --profile monitoring for Prometheus and the alert rules
+#   add --profile tracing for Jaeger (new_env.py --tracing points the services at it)
 #
 # Component sources are sibling folders by default (../governed-llm-gateway, ...), or the folders
 # named in .env. CI checks out the component versions pinned in components.env.
 
 name: governed-ai-platform
+
+# Traces go to the endpoint in .env (Jaeger in the `tracing` profile); empty means tracing off.
+x-tracing: &tracing
+  OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
 
 x-hardening: &hardening
   restart: unless-stopped
@@ -24,6 +29,7 @@ services:
     build: ${GATEWAY_SRC:-../governed-llm-gateway}
     image: governed-llm-gateway:platform
     environment:
+      <<: *tracing
       LLMGW_KEY_AGENTS: ${LLMGW_KEY_AGENTS:?run scripts/new_env.py first}
       LLMGW_KEY_EVIDENCE: ${LLMGW_KEY_EVIDENCE:?run scripts/new_env.py first}
       LLMGW_KEY_RESEARCH: ${LLMGW_KEY_RESEARCH:-}
@@ -42,6 +48,7 @@ services:
     build: ${EVIDENCE_SRC:-../policy-evidence-mcp}
     image: policy-evidence-mcp:platform
     environment:
+      <<: *tracing
       EVIDENCE_MCP_MAX_CLASSIFICATION: internal
       EVIDENCE_MCP_EMBEDDINGS_URL: http://gateway:8080/v1
       EVIDENCE_MCP_EMBEDDINGS_MODEL: auto
@@ -49,6 +56,8 @@ services:
       EVIDENCE_MCP_CACHE_DIR: /tmp/evidence-cache
     volumes:
       - evidence-index:/app/index
+    # Who may call the server: the agents service's token, as a hash, with clearance "internal".
+    secrets: [evidence_mcp_tokens]
     # Re-index with vectors from the gateway (a local embedding model, data policy local_only);
     # if that is not possible, keep the keyword index built into the image.
     command:
@@ -58,15 +67,15 @@ services:
         evidence-mcp ingest --corpus sample_corpus --embeddings
         || echo "embeddings unavailable: serving keyword search";
         exec evidence-mcp serve --transport streamable-http --host 0.0.0.0 --port 8000
-        --allowed-host evidence-mcp
+        --allowed-host evidence-mcp --auth tokens --tokens-file /run/secrets/evidence_mcp_tokens
     healthcheck:
       test: ["CMD", "python", "-c", "import socket; socket.create_connection(('127.0.0.1', 8000), 2)"]
       interval: 10s
       timeout: 3s
       retries: 6
       start_period: 20s
-    # No published port: the MCP server has no authentication of its own, so only services on
-    # the platform network can reach it.
+    # No published port: only services on the platform network can reach it, and each call
+    # needs a token; the agents service's token is cleared for internal documents.
     depends_on:
       gateway: {condition: service_healthy}
 
@@ -75,12 +84,14 @@ services:
     build: ${AGENTS_SRC:-../governed-agents}
     image: governed-agents:platform
     environment:
+      <<: *tracing
       GOVAGENTS_PROVIDER: openai_compatible
       GOVAGENTS_BASE_URL: http://gateway:8080/v1
       GOVAGENTS_API_KEY: ${LLMGW_KEY_AGENTS}
       GOVAGENTS_MODEL_FAST: fast
       GOVAGENTS_MODEL_STRONG: strong
       GOVAGENTS_EVIDENCE_MCP_URL: http://evidence-mcp:8000/mcp
+      GOVAGENTS_EVIDENCE_MCP_TOKEN: ${EVIDENCE_MCP_TOKEN_AGENTS:?run scripts/new_env.py first}
       GOVAGENTS_API_TOKENS: ${GOVAGENTS_API_TOKENS:?run scripts/new_env.py first}
       GOVAGENTS_METRICS_TOKEN: ${AGENTS_METRICS_TOKEN:?run scripts/new_env.py first}
     volumes:
@@ -116,7 +127,19 @@ services:
       - "127.0.0.1:9090:9090"
     depends_on: [gateway, agents]
 
+  jaeger:
+    profiles: [tracing]
+    image: jaegertracing/jaeger:2.21.0
+    restart: unless-stopped
+    environment:
+      JAEGER_LISTEN_HOST: 0.0.0.0   # receive spans from the other containers, not only itself
+    ports:
+      - "127.0.0.1:16686:16686"   # the Jaeger UI; the services send spans to jaeger:4318
+    # In-memory storage: traces are for looking at now, not for keeping.
+
 secrets:
+  evidence_mcp_tokens:
+    file: ./secrets/evidence-mcp-tokens.json
   gateway_metrics_token:
     environment: GATEWAY_METRICS_TOKEN
   agents_metrics_token:

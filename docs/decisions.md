@@ -34,3 +34,22 @@ tokens reach Prometheus as Compose secrets. In production they come from a secre
 Components carry their own unit tests and evaluations. The platform's job is the wiring, so its
 gate is the smoke test that starts everything and walks an agent run through a human approval,
 plus the configuration invariants in `tests/`.
+
+## 7. The MCP server authenticates its callers, even inside the platform
+
+The private network already keeps outsiders away from the MCP server, but a network rule says
+where a call comes from, not who makes it. The agents service therefore presents its own token,
+and the server applies the clearance attached to that identity. A second client (another agent
+team, an analyst's assistant) gets its own token and clearance, without touching the network.
+
+## 8. One trace per agent run, with no content
+
+Logs say what each service did; a trace says where the time and the decisions went across all
+three. Spans carry identifiers, model names, tokens, costs and policy verdicts, and never prompts,
+answers or documents, so traces can go to a shared backend without becoming a copy of the data.
+
+## 9. Kubernetes manifests with Kustomize, not a Helm chart
+
+Three modes are three overlays over one base, plus small components (tracing, egress, model
+server). Kustomize keeps the manifests plain YAML that a reviewer can read and that `kubectl`
+applies without another tool; a chart's templating would add indirection for no extra choice.

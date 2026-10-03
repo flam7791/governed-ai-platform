@@ -9,7 +9,7 @@ design to discuss, not a tested deployment: nothing here has been deployed from 
 |---|---|---|
 | Containers on one Docker network | **Azure Container Apps**, one environment with a virtual network | Managed containers, scale to zero, internal ingress |
 | Published ports 8080 / 8090 | Container Apps **ingress**: gateway internal only, agents service behind the organisation's front door with single sign-on | Nothing public by default |
-| MCP server, unpublished | Container App with **internal ingress only** | Same rule as here: no authentication of its own, so not reachable from outside |
+| MCP server, unpublished, bearer token | Container App with **internal ingress only**, callers authenticated with **Entra ID** tokens (`--auth entra`, clearance from app roles) | Defence in depth: the network and the identity both decide |
 | `.env` secrets | **Azure Key Vault**, referenced by the Container Apps as secrets | Rotation and access audit |
 | `ANTHROPIC_API_KEY` / Azure keys | **Managed identity** for Azure OpenAI (`"auth": "entra_id"` in the gateway): no model key exists | Nothing to leak or rotate |
 | Ollama for local models | **Azure OpenAI** deployments in the organisation's tenant and region, or open-weight models on Azure Machine Learning or AKS with GPUs | Data stays in the tenant; open-weight where sovereignty requires |

@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: governed-ai
+  labels:
+    # Pod Security Admission: every pod must run as non-root, without privilege escalation or
+    # Linux capabilities, with the runtime's seccomp profile. The API server refuses others.
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+    pod-security.kubernetes.io/warn: restricted

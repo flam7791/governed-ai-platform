@@ -1,0 +1,119 @@
+# Default deny, then only the paths the architecture needs. With a CNI that enforces network
+# policies (Calico, Cilium, Azure CNI with network policy), these are the platform's firewall:
+#
+#   agents ──▶ gateway ──▶ model servers         people ──▶ agents (from the ingress namespace)
+#   agents ──▶ evidence-mcp ──▶ gateway           Prometheus ──▶ gateway, agents (monitoring ns)
+#
+# Nothing leaves the cluster unless an overlay adds the internet-egress component.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: kube-system}
+          podSelector:
+            matchLabels: {k8s-app: kube-dns}
+      ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: gateway
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/name: gateway}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:  # the platform's own callers, each with its team key
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: agents}
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: evidence-mcp}
+        - namespaceSelector:  # Prometheus, with the scrape token
+            matchLabels: {kubernetes.io/metadata.name: monitoring}
+      ports:
+        - {protocol: TCP, port: 8080}
+  egress:
+    - to:  # model servers inside the cluster
+        - podSelector:
+            matchLabels: {governed-ai/role: model-server}
+      ports:
+        - {protocol: TCP, port: 9000}
+        - {protocol: TCP, port: 11434}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: evidence-mcp
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/name: evidence-mcp}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:  # only the agents service may call the MCP server (and it needs a token too)
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: agents}
+      ports:
+        - {protocol: TCP, port: 8000}
+  egress:
+    - to:  # embeddings through the gateway
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: gateway}
+      ports:
+        - {protocol: TCP, port: 8080}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: agents
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/name: agents}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:  # people, through the ingress controller; Prometheus
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: ingress-nginx}
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: monitoring}
+      ports:
+        - {protocol: TCP, port: 8090}
+  egress:
+    - to:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: gateway}
+      ports:
+        - {protocol: TCP, port: 8080}
+    - to:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: evidence-mcp}
+      ports:
+        - {protocol: TCP, port: 8000}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: model-server
+spec:
+  podSelector:
+    matchLabels: {governed-ai/role: model-server}
+  policyTypes: [Ingress]
+  ingress:
+    - from:  # only the gateway reaches a model
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: gateway}

@@ -1,0 +1,95 @@
+name: Kubernetes end to end
+
+# Deploys the demo overlay to a throw-away kind cluster (whose network plugin enforces network
+# policies) with the pinned component versions built from source, then runs the same smoke test
+# as the Compose stack, plus a check that a pod without the agents' label cannot reach the MCP
+# server. Started by hand (Actions > Kubernetes end to end > Run workflow, or `gh workflow run
+# kubernetes.yml`); the manifests themselves are rendered and validated on every push by CI.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  kind:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: platform
+
+      - name: Read the pinned component versions
+        run: grep -v '^#' platform/components.env | grep . >> "$GITHUB_ENV"
+
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ env.GATEWAY_REPO }}
+          ref: ${{ env.GATEWAY_REF }}
+          path: governed-llm-gateway
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ env.EVIDENCE_REPO }}
+          ref: ${{ env.EVIDENCE_REF }}
+          path: policy-evidence-mcp
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ env.AGENTS_REPO }}
+          ref: ${{ env.AGENTS_REF }}
+          path: governed-agents
+
+      - name: Build the images under the names the manifests use
+        run: |
+          docker build -t "ghcr.io/flam7791/governed-llm-gateway:${GATEWAY_REF#v}" governed-llm-gateway
+          docker build -t "ghcr.io/flam7791/policy-evidence-mcp:${EVIDENCE_REF#v}" policy-evidence-mcp
+          docker build -t "ghcr.io/flam7791/governed-agents:${AGENTS_REF#v}" governed-agents
+          tag=$(grep -A2 'name: governed-ai-platform-mock-llm' platform/deploy/kubernetes/components/mock-llm/kustomization.yaml | sed -n 's/.*newTag: "\(.*\)"/\1/p')
+          docker build -t "ghcr.io/flam7791/governed-ai-platform/mock-llm:$tag" platform/mock-llm
+          echo "MOCK_TAG=$tag" >> "$GITHUB_ENV"
+
+      - name: Create the cluster
+        uses: helm/kind-action@v1
+        with:
+          cluster_name: platform
+
+      - name: Load the images
+        run: |
+          for image in "governed-llm-gateway:${GATEWAY_REF#v}" "policy-evidence-mcp:${EVIDENCE_REF#v}" \
+                       "governed-agents:${AGENTS_REF#v}" "governed-ai-platform/mock-llm:$MOCK_TAG"; do
+            kind load docker-image --name platform "ghcr.io/flam7791/$image"
+          done
+
+      - name: Deploy the demo overlay
+        working-directory: platform
+        run: |
+          python scripts/new_env.py --demo --kubernetes --force
+          kubectl apply -k deploy/kubernetes/overlays/demo
+          kubectl -n governed-ai wait --for=condition=Available deployment --all --timeout=600s
+          kubectl -n governed-ai get pods -o wide
+
+      - name: Smoke test through port-forwards
+        working-directory: platform
+        run: |
+          cp deploy/kubernetes/overlays/demo/secrets/platform.env .env
+          kubectl -n governed-ai port-forward svc/gateway 8080:8080 > /dev/null &
+          kubectl -n governed-ai port-forward svc/agents 8090:8090 > /dev/null &
+          sleep 5
+          python scripts/smoke_test.py
+
+      - name: Network policy is enforced (an unlabelled pod cannot reach the MCP server)
+        run: |
+          kubectl -n governed-ai run probe --restart=Never --image=busybox:1.37 \
+            --overrides='{"spec":{"securityContext":{"runAsNonRoot":true,"runAsUser":10001,"seccompProfile":{"type":"RuntimeDefault"}},"containers":[{"name":"probe","image":"busybox:1.37","command":["sh","-c","out=$(wget -T 5 -O /dev/null http://evidence-mcp:8000/mcp 2>&1); case \"$out\" in *HTTP/*) echo REACHED;; *) echo BLOCKED;; esac"],"securityContext":{"allowPrivilegeEscalation":false,"readOnlyRootFilesystem":true,"capabilities":{"drop":["ALL"]}}}]}}'
+          kubectl -n governed-ai wait --for=jsonpath='{.status.phase}'=Succeeded pod/probe --timeout=120s
+          result=$(kubectl -n governed-ai logs probe)
+          echo "probe: $result"
+          test "$result" = "BLOCKED"
+
+      - name: State and logs
+        if: always()
+        run: |
+          kubectl -n governed-ai get all,networkpolicy,pvc || true
+          for d in gateway evidence-mcp agents mock-llm; do
+            echo "::group::$d"; kubectl -n governed-ai logs deploy/$d --all-containers --tail=200 || true; echo "::endgroup::"
+          done

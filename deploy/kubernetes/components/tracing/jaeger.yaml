@@ -1,0 +1,90 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jaeger
+  labels:
+    app.kubernetes.io/name: jaeger
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: jaeger
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: jaeger
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: jaeger
+          image: jaegertracing/jaeger:2.21.0  # in-memory storage: for looking at now
+          env:
+            - {name: JAEGER_LISTEN_HOST, value: 0.0.0.0}
+          ports:
+            - {name: otlp-http, containerPort: 4318}
+            - {name: ui, containerPort: 16686}
+          readinessProbe:
+            httpGet: {path: /, port: ui}
+            periodSeconds: 10
+          resources:
+            requests: {cpu: 50m, memory: 128Mi}
+            limits: {cpu: "1", memory: 1Gi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: tmp
+          emptyDir: {sizeLimit: 64Mi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jaeger
+spec:
+  selector:
+    app.kubernetes.io/name: jaeger
+  ports:
+    - {name: otlp-http, port: 4318, targetPort: otlp-http}
+    - {name: ui, port: 16686, targetPort: ui}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: jaeger
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/name: jaeger}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:  # spans from the platform's services; the UI through `kubectl port-forward`
+        - podSelector:
+            matchExpressions:
+              - {key: app.kubernetes.io/name, operator: In, values: [gateway, evidence-mcp, agents]}
+      ports:
+        - {protocol: TCP, port: 4318}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: send-spans
+spec:
+  podSelector:
+    matchExpressions:
+      - {key: app.kubernetes.io/name, operator: In, values: [gateway, evidence-mcp, agents]}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: jaeger}
+      ports:
+        - {protocol: TCP, port: 4318}

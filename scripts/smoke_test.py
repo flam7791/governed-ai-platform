@@ -4,8 +4,10 @@
 
 It checks, in order: health; access control at the gateway; embeddings through the gateway; an
 agent run that searches documents over MCP, has a publication refused, and waits for a person;
-four eyes (the requester cannot approve); approval by a named approver; completion; and the
-monitoring figures. It reads the tokens from .env and exits non-zero at the first failure.
+four eyes (the requester cannot approve); approval by a named approver; completion; the
+monitoring figures; and, when tracing is on (new_env.py --tracing, `tracing` profile), that the
+run is one trace across the three services with no request text on any span. It reads the
+tokens from .env and exits non-zero at the first failure.
 
 With the demonstration model (GATEWAY_CONFIG=gateway.demo.json) the run is fully scripted and
 deterministic, which is what CI uses. With live models the same checks apply, but the agents
@@ -17,11 +19,14 @@ import sys
 import time
 import urllib.error
 import urllib.request
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 GATEWAY = "http://127.0.0.1:8080"
 AGENTS = "http://127.0.0.1:8090"
+JAEGER = "http://127.0.0.1:16686"
+SERVICES = {"governed-agents", "governed-llm-gateway", "policy-evidence-mcp"}
 REQUEST = """From: head.of.unit@aurora.example
 Subject: Input needed by 2026-10-15 - AI tools and restricted information
 
@@ -78,6 +83,45 @@ def wait_status(run_id, token, wanted, seconds=180):
             raise AssertionError(f"run {run_id} {run['status']}: {run.get('error')}")
         time.sleep(1)
     raise AssertionError(f"run {run_id} did not reach {wanted}")
+
+
+def run_trace(run_id: str, seconds=90) -> dict[str, list[dict]]:
+    """The trace of the run's first part (up to the approval) from Jaeger (API v3, OTLP JSON), as
+    {service: [spans]}: found by the run id on the agent_run span, once the agents service, the
+    gateway and the MCP server's search_documents call have all arrived."""
+    deadline, seen = time.time() + seconds, set()
+    while time.time() < deadline:
+        now = datetime.now(timezone.utc)
+        window = (now - timedelta(hours=1), now + timedelta(minutes=1))
+        start, end = (t.strftime("%Y-%m-%dT%H:%M:%SZ") for t in window)
+        found = call(
+            "GET",
+            f"{JAEGER}/api/v3/traces?query.service_name=governed-agents"
+            f"&query.start_time_min={start}&query.start_time_max={end}&query.search_depth=50",
+        )
+        traces: dict[str, dict[str, list[dict]]] = {}
+        for resource in found.get("result", {}).get("resourceSpans", []):
+            service = next(
+                a["value"].get("stringValue")
+                for a in resource["resource"]["attributes"]
+                if a["key"] == "service.name"
+            )
+            for scope in resource.get("scopeSpans", []):
+                for span in scope.get("spans", []):
+                    traces.setdefault(span["traceId"], {}).setdefault(service, []).append(span)
+        for by_service in traces.values():
+            spans = [s for group in by_service.values() for s in group]
+            if any(
+                a["key"] == "govagents.run_id" and a["value"].get("stringValue") == run_id
+                for s in spans
+                for a in s.get("attributes", [])
+            ):
+                seen = set(by_service)
+                mcp = {s["name"] for s in by_service.get("policy-evidence-mcp", [])}
+                if seen >= SERVICES and "tools/call search_documents" in mcp:
+                    return by_service
+        time.sleep(3)  # spans are exported in batches every few seconds
+    raise AssertionError(f"no trace of run {run_id} across {sorted(SERVICES)} (saw {seen})")
 
 
 def main() -> int:
@@ -152,6 +196,16 @@ def main() -> int:
     agents_metrics = call("GET", f"{AGENTS}/metrics", e["AGENTS_METRICS_TOKEN"])
     assert 'govagents_runs{scenario="briefing_desk",status="completed"}' in agents_metrics
     ok("metrics show the agents' model calls at the gateway and the completed run")
+
+    if e.get("OTEL_EXPORTER_OTLP_ENDPOINT"):
+        by_service = run_trace(run_id)
+        spans = [s for group in by_service.values() for s in group]
+        values = [str(a["value"]) for s in spans for a in s.get("attributes", [])]
+        assert not any("approved for staff" in v for v in values), "request text on a span"
+        print(
+            f"    {len(spans)} spans: " + ", ".join(f"{k} {len(v)}" for k, v in by_service.items())
+        )
+        ok("the run is one trace across agents, gateway and MCP server, with no request text")
 
     print(f"\nAll {len(steps)} checks passed.")
     return 0

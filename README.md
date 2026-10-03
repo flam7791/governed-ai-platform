@@ -25,7 +25,7 @@ flowchart LR
     APP["Your own apps<br/>(OpenAI SDK)"] -- "team key" --> GW
     subgraph P["Platform network"]
         AG["agents service<br/>policy engine, approvals,<br/>audit trail"] -- "team key 'agents'" --> GW["LLM gateway<br/>routing, masking,<br/>budgets, ledger"]
-        AG -- "MCP over HTTP" --> MCP["evidence MCP server<br/>hybrid search"]
+        AG -- "MCP over HTTP<br/>(bearer token)" --> MCP["evidence MCP server<br/>hybrid search"]
         MCP -- "embeddings,<br/>team 'evidence-indexer'<br/>(local only)" --> GW
         PR["Prometheus<br/>+ alert rules"] -. "scrape (token)" .-> GW
         PR -. "scrape (token)" .-> AG
@@ -41,9 +41,10 @@ What the wiring enforces:
   server's embeddings, so one ledger shows who spent what, on which model, under which policy.
 - **Documents are indexed with a local embedding model only**: the indexer's team is
   `local_only` at the gateway, so document text cannot leave even by misconfiguration.
-- **The MCP server is not published** outside the platform network, since it has no
-  authentication of its own. People reach the agents through the approvals page; applications
-  reach models through the gateway with a team key.
+- **The MCP server is not published** outside the platform network, and every call needs a
+  bearer token: the agents service has its own, which the server maps to the clearance
+  "internal" (it holds only the token's hash). People reach the agents through the approvals
+  page; applications reach models through the gateway with a team key.
 - **Secrets live in `.env`** (generated, git-ignored) and reach the services as environment
   variables or Compose secrets, never in images or configuration files.
 - **Containers are hardened**: non-root users, read-only file systems, no Linux capabilities,
@@ -64,7 +65,7 @@ cd governed-ai-platform
 
 python scripts/new_env.py --demo       # random keys and tokens in .env; prints sign-in tokens
 docker compose --profile demo up -d --build --wait
-python scripts/smoke_test.py           # 8 end-to-end checks
+python scripts/smoke_test.py           # 8 end-to-end checks (9 with --tracing)
 ```
 
 Then open **http://127.0.0.1:8090**, sign in with the requester token to see runs, or with the
@@ -112,11 +113,39 @@ and loads [alert rules](monitoring/alerts.yml): a team above 80% of its budget, 
 failing, high latency, an approval waiting more than four hours, failing runs, and a spike in
 refused agent actions.
 
+## Tracing
+
+```bash
+python scripts/new_env.py --demo --tracing --force
+docker compose --profile demo --profile tracing up -d --build --wait     # Jaeger on :16686
+```
+
+The three services export OpenTelemetry spans, and trace context travels with every call (the
+W3C `traceparent` header to the gateway, the MCP request metadata to the evidence server), so an
+agent run is **one trace**: the run, each agent step, each model call with its tokens and cost,
+the gateway's routing decision, each tool call with the policy's verdict, and the MCP server's
+search with the clearance it applied. Prompts, answers and document text are never put on a
+span. The smoke test checks this on every change.
+
+## Kubernetes
+
+```bash
+python scripts/new_env.py --demo --kubernetes
+kubectl apply -k deploy/kubernetes/overlays/demo          # or live, sovereign
+```
+
+Kustomize manifests for the same three modes, with the restricted Pod Security Standard, a
+default-deny network where the MCP server accepts the agents service only, secrets by reference,
+and optional tracing. CI renders and schema-validates every overlay on each push, and a
+[workflow](.github/workflows/kubernetes.yml) deploys the demo to a kind cluster and runs the
+smoke test there. See [docs/kubernetes.md](docs/kubernetes.md), including the mapping to AKS.
+
 ## What CI proves on every change
 
 The [workflow](.github/workflows/ci.yml) checks out the **exact component versions pinned in
-[`components.env`](components.env)**, validates the configuration and the alert rules, builds
-every image, starts the stack, runs the smoke test, and prints the logs. It also runs weekly to
+[`components.env`](components.env)**, validates the configuration, the alert rules and the
+Kubernetes manifests, builds every image, starts the stack with tracing, runs the smoke test
+(including one trace across the three services), and prints the logs. It also runs weekly to
 catch drift in base images and dependencies. Upgrading a component is a one-line change to
 `components.env` that the smoke test must pass.
 
@@ -126,6 +155,7 @@ catch drift in base images and dependencies. Upgrading a component is a one-line
 - [Lifecycle](docs/lifecycle.md): versions, release checklist, evaluation gates, upgrades,
   rollback, retiring a model.
 - [Sovereign mode](docs/sovereign.md): open-weight models only, sizing, vLLM, licences.
+- [Kubernetes](docs/kubernetes.md): overlays, hardening, network policies, models, AKS mapping.
 - [Design decisions](docs/decisions.md): why the platform is built this way.
 - [Azure deployment design](docs/azure.md): how this maps to Azure Container Apps, Key Vault,
   managed identity and Azure Monitor. A design, not a tested deployment.

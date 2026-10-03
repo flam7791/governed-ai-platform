@@ -1,0 +1,32 @@
+# Claude for the fast and strong tiers (ANTHROPIC_API_KEY in secrets/platform.env), local models
+# through Ollama for sensitive teams and embeddings. HTTPS out for the gateway and the MCP server.
+#
+#   python scripts/new_env.py --kubernetes              # writes secrets/ here (git-ignored)
+#   kubectl apply -k deploy/kubernetes/overlays/live
+#
+# Add the tracing component to trace every run: components: [..., ../../components/tracing]
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: governed-ai
+
+resources:
+  - ../../base
+
+components:
+  - ../../components/ollama
+  - ../../components/model-pull
+  - ../../components/internet-egress
+
+configMapGenerator:
+  - name: gateway-config
+    files:
+      - gateway.json   # identical to config/gateway.json (checked by tests/test_kubernetes.py)
+
+secretGenerator:
+  - name: platform-secrets
+    envs:
+      - secrets/platform.env
+  - name: evidence-mcp-tokens
+    files:
+      - tokens.json=secrets/evidence-mcp-tokens.json

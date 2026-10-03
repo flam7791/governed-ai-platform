@@ -1,0 +1,9 @@
+# The demonstration model server (scripted, not a language model), for the demo overlay.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+resources:
+  - mock-llm.yaml
+images:
+  - name: governed-ai-platform-mock-llm
+    newName: ghcr.io/flam7791/governed-ai-platform/mock-llm
+    newTag: "0.4.0"

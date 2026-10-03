@@ -1,0 +1,29 @@
+# The whole platform with the demonstration model: no keys, no GPU, nothing leaves the cluster.
+#
+#   python scripts/new_env.py --demo --kubernetes       # writes secrets/ here (git-ignored)
+#   kubectl apply -k deploy/kubernetes/overlays/demo
+#
+# Add the tracing component to trace every run: components: [..., ../../components/tracing]
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: governed-ai
+
+resources:
+  - ../../base
+
+components:
+  - ../../components/mock-llm
+
+configMapGenerator:
+  - name: gateway-config
+    files:
+      - gateway.json   # identical to config/gateway.demo.json (checked by tests/test_kubernetes.py)
+
+secretGenerator:
+  - name: platform-secrets
+    envs:
+      - secrets/platform.env
+  - name: evidence-mcp-tokens
+    files:
+      - tokens.json=secrets/evidence-mcp-tokens.json

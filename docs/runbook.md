@@ -24,6 +24,10 @@ Everyday operations of the platform. Commands run in the repository folder.
 - **People** (`GOVAGENTS_API_TOKENS`, `name:role:token`): `requester` starts runs, `approver`
   decides, `admin` does both and can halt runs. Add a person by adding an entry and restarting
   the agents service.
+- **MCP server** (`EVIDENCE_MCP_TOKEN_AGENTS`): the agents service's token for the evidence
+  server, which holds only its hash in `secrets/evidence-mcp-tokens.json` (clearance
+  `internal`). Rotated with everything else by `new_env.py --force`. Another client gets its own
+  entry, created with `evidence-mcp token create --name <client> --clearance <level>`.
 - **Provider keys** (`ANTHROPIC_API_KEY`, `AZURE_OPENAI_API_KEY`) exist only in `.env`. On Azure,
   use managed identity instead and there is no model key at all.
 

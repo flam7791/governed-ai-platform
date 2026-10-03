@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.4.0 (2026-10)
+
+- Components 0.3.0: MCP access management, OpenTelemetry tracing, SharePoint through Microsoft
+  Graph (evidence server), MCP bearer tokens (agents).
+- The MCP server requires a token; the agents service has its own, mapped to the clearance
+  "internal". `new_env.py` generates both sides (the server holds only the hash).
+- Tracing: `tracing` compose profile with Jaeger, `new_env.py --tracing`; the smoke test checks
+  that a run is one trace across the three services, with no request text on any span.
+- Kubernetes: Kustomize base, components and overlays (demo, live, sovereign); restricted Pod
+  Security Standard, default-deny network policies, secrets by reference, optional tracing.
+  CI renders and schema-validates every overlay; a workflow deploys the demo to kind and runs
+  the smoke test there. docs/kubernetes.md, with the AKS mapping.
+- The demonstration model server's image is published to GitHub Container Registry on a tag.
+
 ## 0.3.0 (2026-10)
 
 - Sovereign mode: `config/gateway.sovereign.json` runs every tier and the embeddings on

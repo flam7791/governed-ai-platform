@@ -1,0 +1,32 @@
+# The platform on Kubernetes: gateway, MCP evidence server and agents service, hardened, with a
+# default-deny network. Deploy an overlay (demo, live, sovereign), not this base directly:
+#   python scripts/new_env.py --demo --kubernetes      # the overlay's secrets (git-ignored)
+#   kubectl apply -k deploy/kubernetes/overlays/demo
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: governed-ai
+
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: governed-ai-platform
+
+resources:
+  - namespace.yaml
+  - gateway.yaml
+  - evidence-mcp.yaml
+  - agents.yaml
+  - network-policies.yaml
+
+# Images published by each component's release workflow (GitHub Container Registry). To use
+# your own registry (for example Azure Container Registry), override newName in an overlay.
+images:
+  - name: governed-llm-gateway
+    newName: ghcr.io/flam7791/governed-llm-gateway
+    newTag: "0.3.0"
+  - name: policy-evidence-mcp
+    newName: ghcr.io/flam7791/policy-evidence-mcp
+    newTag: "0.3.0"
+  - name: governed-agents
+    newName: ghcr.io/flam7791/governed-agents
+    newTag: "0.3.0"

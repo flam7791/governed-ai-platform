@@ -1,0 +1,8 @@
+# HTTPS out of the cluster for the two services that need it in the live mode: the gateway
+# (Claude, Azure OpenAI) and the MCP server (the public statistics API). Private ranges stay
+# closed, so this does not open a path to other workloads. A firewall or egress gateway with
+# an allow-list of host names (api.anthropic.com, the statistics API) narrows it further.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+resources:
+  - internet-egress.yaml

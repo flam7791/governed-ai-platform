@@ -1,0 +1,121 @@
+# The MCP evidence server. Every call needs a bearer token: the agents service's token, kept as a
+# hash in the evidence-mcp-tokens Secret with the clearance "internal". The index is rebuilt at
+# start-up with vectors from the gateway's local embedding model (keywords if that fails). Its
+# sessions live in memory, so it runs as one replica.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: evidence-mcp
+automountServiceAccountToken: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: evidence-mcp
+  labels:
+    app.kubernetes.io/name: evidence-mcp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: evidence-mcp
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: evidence-mcp
+    spec:
+      serviceAccountName: evidence-mcp
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        - name: index
+          image: policy-evidence-mcp
+          command:
+            - sh
+            - -c
+            - >-
+              for attempt in 1 2 3 4 5 6; do
+              evidence-mcp ingest --corpus sample_corpus --embeddings && exit 0;
+              echo "embeddings not available yet (attempt $attempt)"; sleep 10;
+              done;
+              echo "serving keyword search"; exec evidence-mcp ingest --corpus sample_corpus
+          env: &evidence-env
+            - name: EVIDENCE_MCP_MAX_CLASSIFICATION
+              value: internal
+            - name: EVIDENCE_MCP_EMBEDDINGS_URL
+              value: http://gateway:8080/v1
+            - name: EVIDENCE_MCP_EMBEDDINGS_MODEL
+              value: auto
+            - name: EVIDENCE_MCP_EMBEDDINGS_API_KEY
+              valueFrom: {secretKeyRef: {name: platform-secrets, key: LLMGW_KEY_EVIDENCE}}
+            - name: EVIDENCE_MCP_CACHE_DIR
+              value: /tmp/evidence-cache
+          resources:
+            requests: {cpu: 100m, memory: 256Mi}
+            limits: {cpu: "1", memory: 1Gi}
+          securityContext: &restricted
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - {name: index, mountPath: /app/index}
+            - {name: tmp, mountPath: /tmp}
+      containers:
+        - name: evidence-mcp
+          image: policy-evidence-mcp
+          args:
+            - evidence-mcp
+            - serve
+            - --transport=streamable-http
+            - --host=0.0.0.0
+            - --port=8000
+            - --allowed-host=evidence-mcp
+            - --auth=tokens
+            - --tokens-file=/app/secrets/tokens.json
+          ports:
+            - name: mcp
+              containerPort: 8000
+          env: *evidence-env
+          readinessProbe:
+            tcpSocket: {port: mcp}
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket: {port: mcp}
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          resources:
+            requests: {cpu: 100m, memory: 256Mi}
+            limits: {cpu: "1", memory: 1Gi}
+          securityContext: *restricted
+          volumeMounts:
+            - {name: index, mountPath: /app/index}
+            - {name: tokens, mountPath: /app/secrets, readOnly: true}
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: index
+          emptyDir: {sizeLimit: 512Mi}
+        - name: tokens
+          secret:
+            secretName: evidence-mcp-tokens
+            defaultMode: 0440
+        - name: tmp
+          emptyDir: {sizeLimit: 256Mi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: evidence-mcp
+spec:
+  selector:
+    app.kubernetes.io/name: evidence-mcp
+  ports:
+    - name: mcp
+      port: 8000
+      targetPort: mcp

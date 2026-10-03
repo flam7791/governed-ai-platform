@@ -45,11 +45,27 @@ jobs:
           pipx run ruff check .
           pipx run ruff format --check .
 
-      - name: Configuration invariants (sovereign has no route out)
+      - name: Install kustomize and kubeconform
+        run: |
+          curl -sSL "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv5.7.1/kustomize_v5.7.1_linux_amd64.tar.gz" | sudo tar xz -C /usr/local/bin kustomize
+          curl -sSL https://github.com/yannh/kubeconform/releases/download/v0.7.0/kubeconform-linux-amd64.tar.gz | sudo tar xz -C /usr/local/bin kubeconform
+
+      - name: Configuration invariants (sovereign has no route out; Kubernetes hardening)
         working-directory: platform
         run: |
-          pip install pytest
+          pip install pytest pyyaml
           pytest -q tests
+
+      - name: Kubernetes manifests render and validate against the API schemas
+        working-directory: platform
+        run: |
+          python scripts/new_env.py --demo --kubernetes --force
+          python scripts/new_env.py --kubernetes --force
+          python scripts/new_env.py --sovereign --kubernetes --force
+          for overlay in demo live sovereign; do
+            kustomize build deploy/kubernetes/overlays/$overlay \
+              | kubeconform -strict -summary -kubernetes-version 1.33.0 -
+          done
 
       - name: Configuration and alert rules are valid
         working-directory: platform
@@ -58,24 +74,24 @@ jobs:
           docker compose --profile demo --profile monitoring config -q
           python scripts/new_env.py --sovereign --force
           docker compose --profile sovereign config -q
-          python scripts/new_env.py --demo --force
+          python scripts/new_env.py --demo --tracing --force
           docker run --rm -v "$PWD/monitoring:/m:ro" --entrypoint promtool \
             prom/prometheus:v3.5.0 check rules /m/alerts.yml
 
-      - name: Build and start the stack (demonstration model, no keys)
+      - name: Build and start the stack (demonstration model, no keys, with tracing)
         working-directory: platform
-        run: docker compose --profile demo up -d --build --wait
+        run: docker compose --profile demo --profile tracing up -d --build --wait
 
-      - name: End-to-end smoke test
+      - name: End-to-end smoke test (including one trace across the three services)
         working-directory: platform
         run: python scripts/smoke_test.py
 
       - name: Logs
         if: always()
         working-directory: platform
-        run: docker compose --profile demo logs --no-color
+        run: docker compose --profile demo --profile tracing logs --no-color
 
       - name: Stop and remove
         if: always()
         working-directory: platform
-        run: docker compose --profile demo down -v
+        run: docker compose --profile demo --profile tracing down -v
