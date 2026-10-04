@@ -50,6 +50,31 @@ What the wiring enforces:
 - **Containers are hardened**: non-root users, read-only file systems, no Linux capabilities,
   no privilege escalation, health checks, state on named volumes.
 
+## See it running
+
+Screenshots from the demo stack (`--profile demo --profile tracing`), the same stack CI starts on
+every change.
+
+**A person decides.** The dispatcher agent wants to send an email; the policy engine says an
+external action at this autonomy level needs a person, so the run waits. The page shows the
+proposed action as text, the reason a person is needed, and who is signed in. Whoever requested
+the run cannot approve it.
+
+![Approvals page with a pending send_email action](docs/images/approvals.png)
+
+**Everything is on the record.** The run's audit trail: each agent's model calls with tokens
+and cost, each tool proposed, the policy's verdict and reason (here, publishing to the website
+is refused outright), and the approval request.
+
+![Audit trail of a run](docs/images/audit-trail.png)
+
+**One trace across three services.** The same run in Jaeger: agent steps in the agents service,
+each model call continuing into the gateway (routing, then the model), and the researcher's
+document search continuing into the MCP server, as a child of the tool call that made it.
+Tokens, costs, models and verdicts are on the spans; the request, prompts and documents are not.
+
+![Jaeger trace of one agent run across the agents service, the gateway and the MCP server](docs/images/trace.png)
+
 ## Quick start: the whole stack with no keys
 
 Requires Docker Desktop (or Docker Engine with Compose) and Python 3.10+. Clone the four
