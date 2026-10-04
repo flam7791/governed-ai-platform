@@ -50,7 +50,18 @@ jobs:
           curl -sSL "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv5.7.1/kustomize_v5.7.1_linux_amd64.tar.gz" | sudo tar xz -C /usr/local/bin kustomize
           curl -sSL https://github.com/yannh/kubeconform/releases/download/v0.7.0/kubeconform-linux-amd64.tar.gz | sudo tar xz -C /usr/local/bin kubeconform
 
-      - name: Configuration invariants (sovereign has no route out; Kubernetes hardening)
+      - name: Install the Bicep CLI
+        run: |
+          curl -sSL -o bicep https://github.com/Azure/bicep/releases/download/v0.47.16/bicep-linux-x64
+          chmod +x bicep && sudo mv bicep /usr/local/bin/bicep
+
+      - name: Azure deployment compiles and passes the Bicep linter
+        working-directory: platform
+        run: |
+          bicep build deploy/azure/main.bicep --stdout > /dev/null
+          bicep lint deploy/azure/main.bicep
+
+      - name: Configuration invariants (sovereign has no route out; Kubernetes and Azure rules)
         working-directory: platform
         run: |
           pip install pytest pyyaml

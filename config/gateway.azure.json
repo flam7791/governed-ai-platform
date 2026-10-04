@@ -1,0 +1,83 @@
+{
+  "db_path": "gateway.db",
+  "cache_ttl_seconds": 3600,
+  "max_output_tokens": 4000,
+  "models": [
+    {
+      "alias": "azure-fast",
+      "provider": "azure_openai",
+      "model": "__FAST_DEPLOYMENT__",
+      "base_url": "__AZURE_OPENAI_ENDPOINT__/openai/v1",
+      "auth": "entra_id",
+      "tier": "fast",
+      "price_input": 0.4,
+      "price_output": 1.6,
+      "external": false
+    },
+    {
+      "alias": "azure-strong",
+      "provider": "azure_openai",
+      "model": "__STRONG_DEPLOYMENT__",
+      "base_url": "__AZURE_OPENAI_ENDPOINT__/openai/v1",
+      "auth": "entra_id",
+      "tier": "strong",
+      "price_input": 2.0,
+      "price_output": 8.0,
+      "external": false
+    },
+    {
+      "alias": "azure-embed",
+      "provider": "azure_openai",
+      "model": "__EMBEDDING_DEPLOYMENT__",
+      "base_url": "__AZURE_OPENAI_ENDPOINT__/openai/v1",
+      "auth": "entra_id",
+      "kind": "embedding",
+      "tier": "embedding",
+      "price_input": 0.02,
+      "price_output": 0.0,
+      "external": false
+    }
+  ],
+  "tier_models": {
+    "local": "azure-fast",
+    "fast": "azure-fast",
+    "strong": "azure-strong"
+  },
+  "fallback_order": [
+    "azure-strong",
+    "azure-fast"
+  ],
+  "embedding_model": "azure-embed",
+  "teams": [
+    {
+      "name": "agents",
+      "key_env": "LLMGW_KEY_AGENTS",
+      "monthly_budget_usd": 50,
+      "allowed_models": [
+        "*"
+      ],
+      "data_policy": "mask_pii",
+      "on_budget_exhausted": "degrade"
+    },
+    {
+      "name": "evidence-indexer",
+      "key_env": "LLMGW_KEY_EVIDENCE",
+      "monthly_budget_usd": 5,
+      "allowed_models": [
+        "azure-embed"
+      ],
+      "data_policy": "local_only",
+      "on_budget_exhausted": "block"
+    },
+    {
+      "name": "research",
+      "key_env": "LLMGW_KEY_RESEARCH",
+      "monthly_budget_usd": 20,
+      "allowed_models": [
+        "*"
+      ],
+      "data_policy": "mask_pii",
+      "on_budget_exhausted": "block"
+    }
+  ]
+}

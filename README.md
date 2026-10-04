@@ -182,8 +182,8 @@ catch drift in base images and dependencies. Upgrading a component is a one-line
 - [Sovereign mode](docs/sovereign.md): open-weight models only, sizing, vLLM, licences.
 - [Kubernetes](docs/kubernetes.md): overlays, hardening, network policies, models, AKS mapping.
 - [Design decisions](docs/decisions.md): why the platform is built this way.
-- [Azure deployment design](docs/azure.md): how this maps to Azure Container Apps, Key Vault,
-  managed identity and Azure Monitor. A design, not a tested deployment.
+- [Azure](docs/azure.md): Bicep for Container Apps, Key Vault, managed identity and Azure
+  OpenAI, with the mapping from this stack; compiled and checked in CI, not deployed from here.
 
 ## Limitations
 

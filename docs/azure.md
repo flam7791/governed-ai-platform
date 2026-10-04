@@ -1,7 +1,45 @@
-# Deploying on Azure: a design
+# Deploying on Azure
 
-How this platform maps to Azure services for an organisation that runs on Microsoft. This is a
-design to discuss, not a tested deployment: nothing here has been deployed from this repository.
+How this platform maps to Azure services for an organisation that runs on Microsoft, and the
+Bicep that deploys it: [`deploy/azure/main.bicep`](../deploy/azure/main.bicep). CI compiles it
+and runs the Bicep linter on every change, and `tests/test_azure.py` checks its security
+properties; it has not been deployed from this repository (that needs a subscription).
+
+## Deploy
+
+Prerequisites: a resource group, an Azure OpenAI account in it with three deployments (a small
+chat model, a larger one, an embedding model), and the Azure CLI signed in.
+
+```bash
+python scripts/new_env.py --azure                       # deploy/azure/secrets.env (git-ignored)
+set -a; . deploy/azure/secrets.env; set +a
+export AZURE_OPENAI_ENDPOINT=https://<account>.openai.azure.com AZURE_OPENAI_ACCOUNT=<account>
+az deployment group create -g <resource group> -f deploy/azure/main.bicep \
+    -p deploy/azure/main.bicepparam
+```
+
+What it creates:
+
+| Resource | Purpose |
+|---|---|
+| Log Analytics workspace | Container logs (one JSON line per request from the gateway) |
+| Virtual network, Container Apps environment | The services, on a delegated subnet |
+| User-assigned managed identity | Reads Key Vault secrets; calls Azure OpenAI (`Cognitive Services OpenAI User`): no model key exists |
+| Key Vault (RBAC, purge protection) | Every key and token, written by the deployment from parameters read from the environment |
+| Storage account, two file shares | The gateway's ledger and the agents' runs (SQLite, one replica each) |
+| `gateway` | Internal ingress only; `config/gateway.azure.json` with the account's endpoint and deployments filled in |
+| `evidence-mcp` | Internal ingress only; the agents service's token, clearance internal |
+| `agents` | External ingress for the approvals page; `approvalsAllowedCidrs` limits who reaches it |
+| `evidence-m365` (optional) | `enableCopilotStudio=true`: the evidence server with external ingress and Entra ID tokens, for a Copilot Studio agent (see policy-evidence-mcp's `integrations/copilot-studio`) |
+
+In `gateway.azure.json` the Azure OpenAI models are marked internal (`"external": false`):
+the account is in the organisation's tenant and region, so the document indexer (`local_only`)
+may use its embedding model. If your policy treats Azure OpenAI as external, set them to `true`
+and the indexer will be refused, as it should be.
+
+Before production: private endpoints for Key Vault, storage and Azure OpenAI; Entra ID
+authentication (Easy Auth) in front of the approvals page; PostgreSQL instead of SQLite for more
+than one replica; an OpenTelemetry Collector to Application Insights (`otlpEndpoint`).
 
 ## Mapping
 

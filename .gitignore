@@ -2,6 +2,7 @@
 .env
 secrets/
 deploy/kubernetes/overlays/*/secrets/
+deploy/azure/secrets.env
 *.db
 
 # Python

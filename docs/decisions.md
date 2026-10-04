@@ -53,3 +53,11 @@ answers or documents, so traces can go to a shared backend without becoming a co
 Three modes are three overlays over one base, plus small components (tracing, egress, model
 server). Kustomize keeps the manifests plain YAML that a reviewer can read and that `kubectl`
 applies without another tool; a chart's templating would add indirection for no extra choice.
+
+## 10. Azure: Container Apps and a managed identity, not keys
+
+The Azure deployment keeps the shape of the other two (three services, the MCP server and the
+gateway internal only) and changes how secrets and models are reached: one user-assigned
+identity reads Key Vault and calls Azure OpenAI, so there is no model key to store, leak or
+rotate. Container Apps rather than AKS, because three services at one replica each do not need a
+cluster to operate; the Kubernetes manifests cover organisations that already run one.

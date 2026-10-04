@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.0 (2026-10)
+
+- Azure: `deploy/azure/main.bicep` (Container Apps in a virtual network, Key Vault references
+  through a user-assigned managed identity, Azure OpenAI with no key, Azure Files for SQLite,
+  optional Copilot Studio front door), `main.bicepparam` reading secrets from the environment,
+  `new_env.py --azure`, `config/gateway.azure.json`; compiled, linted and tested in CI.
+- Components: policy-evidence-mcp 0.3.1 (Microsoft 365 Copilot through Copilot Studio; hosts
+  without a port behind TLS), governed-agents 0.3.1 (tool work nested under its span).
+- README: screenshots of the approvals page, the audit trail and one trace across the services.
+
 ## 0.4.0 (2026-10)
 
 - Components 0.3.0: MCP access management, OpenTelemetry tracing, SharePoint through Microsoft
