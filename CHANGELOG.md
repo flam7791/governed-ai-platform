@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- `AGENTS.md` (commands, layout, invariants) for coding agents; `CLAUDE.md` imports it.
+
 ## 0.5.0 (2026-10)
 
 - Azure: `deploy/azure/main.bicep` (Container Apps in a virtual network, Key Vault references
