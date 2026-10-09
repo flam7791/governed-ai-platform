@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.6.0 (2026-10)
 
 - Components: governed-llm-gateway 0.4.0 (optional judged router, off by default; the rules stay
   the default), policy-evidence-mcp 0.4.1 (optional reranking, off by default, with a timeout
