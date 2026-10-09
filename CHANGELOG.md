@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Components: governed-llm-gateway 0.4.0 (optional judged router, off by default; the rules stay
+  the default), policy-evidence-mcp 0.4.1 (optional reranking, off by default, with a timeout
+  setting), governed-agents 0.4.0 (turn rules as a chain of guards, behaviour unchanged; also
+  brings 0.3.2 to 0.3.6: structured output for local models, required tools before a finish).
+  Pinned in `components.env`, the Kubernetes base and the Azure deployment.
 - `AGENTS.md` (commands, layout, invariants) for coding agents; `CLAUDE.md` imports it.
 
 ## 0.5.0 (2026-10)
