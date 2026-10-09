@@ -26,9 +26,9 @@ param location string = resourceGroup().location
 param prefix string = 'govai'
 
 @description('Image tags of the components (GitHub Container Registry).')
-param gatewayImage string = 'ghcr.io/flam7791/governed-llm-gateway:0.3.0'
-param evidenceImage string = 'ghcr.io/flam7791/policy-evidence-mcp:0.3.1'
-param agentsImage string = 'ghcr.io/flam7791/governed-agents:0.3.1'
+param gatewayImage string = 'ghcr.io/flam7791/governed-llm-gateway:0.4.0'
+param evidenceImage string = 'ghcr.io/flam7791/policy-evidence-mcp:0.4.1'
+param agentsImage string = 'ghcr.io/flam7791/governed-agents:0.4.0'
 
 @description('Azure OpenAI endpoint, e.g. https://my-aoai.openai.azure.com (no trailing slash).')
 param azureOpenAiEndpoint string
