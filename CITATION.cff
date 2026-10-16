@@ -1,0 +1,19 @@
+cff-version: 1.2.0
+message: "If you use or refer to this software, please cite it as below."
+type: software
+title: governed-ai-platform
+abstract: "The governed AI components (LLM gateway, MCP evidence server, agent runtime) deployed as one operable service on Docker Compose, Kubernetes or Azure Container Apps."
+authors:
+  - given-names: Flavio
+    family-names: Mericio
+version: 0.6.1
+date-released: "2026-10-16"
+license: MIT
+repository-code: "https://github.com/flam7791/governed-ai-platform"
+url: "https://github.com/flam7791/governed-ai-platform"
+keywords:
+  - ai-platform
+  - kubernetes
+  - docker-compose
+  - opentelemetry
+  - ai-governance

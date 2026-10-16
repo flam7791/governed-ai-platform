@@ -17,6 +17,13 @@ laptop into something an organisation can run, watch and upgrade?*
 
 > Independent project. The documents and the organisation in the scenarios are fictional.
 
+> **Part of a portfolio.** Implements platform component [C2][aief-c2] of the [AI engineering
+> framework][aief], at its *Operate* stage. [All repositories][aief-all].
+
+[aief]: https://github.com/flam7791/ai-engineering-framework
+[aief-all]: https://github.com/flam7791
+[aief-c2]: https://github.com/flam7791/ai-engineering-framework/blob/main/docs/patterns.md#c2-reference-deployment
+
 ## Architecture
 
 ```mermaid

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.1 (2026-10)
+
+- Components: policy-evidence-mcp 0.5.1 (from 0.4.1). It adds the `list` answer format for the
+  optional reranker and the measured reranking runs; reranking stays off by default and the
+  default format is unchanged. Pinned in `components.env`, the Kubernetes base and the Azure
+  deployment; the end-to-end smoke test decides whether it ships.
+- The README opens with the framework component this repository implements and a link to the
+  other repositories.
+- `CITATION.cff`, so GitHub offers "Cite this repository".
+
 ## 0.6.0 (2026-10)
 
 - Components: governed-llm-gateway 0.4.0 (optional judged router, off by default; the rules stay
