@@ -1,5 +1,5 @@
 # The demonstration model server: standard library only.
-FROM python:3.12-slim
+FROM python:3.15-slim
 ENV PYTHONUNBUFFERED=1
 WORKDIR /app
 COPY mock_llm.py .
