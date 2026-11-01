@@ -117,7 +117,7 @@ services:
 
   prometheus:
     profiles: [monitoring]
-    image: prom/prometheus:v3.15.0
+    image: prom/prometheus:v3.15.1
     restart: unless-stopped
     volumes:
       - ./monitoring:/etc/prometheus:ro
@@ -129,7 +129,7 @@ services:
 
   jaeger:
     profiles: [tracing]
-    image: jaegertracing/jaeger:2.21.0
+    image: jaegertracing/jaeger:2.22.0
     restart: unless-stopped
     environment:
       JAEGER_LISTEN_HOST: 0.0.0.0   # receive spans from the other containers, not only itself
